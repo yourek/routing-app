@@ -5,11 +5,7 @@ import uuid
 import json
 from pathlib import Path
 
-
-@dataclass
-class Role:
-    name: str
-    description: str = ""
+from db.roles import Role
 
 
 @dataclass
@@ -65,8 +61,9 @@ class Scenario:
         return data
 
     def save(self, folder: Path):
-        folder.mkdir(parents=True, exist_ok=True)
-        file_path = folder / f"{self.id}.json"
+        folder_path = folder / self.id
+        folder_path.mkdir(parents=True, exist_ok=True)
+        file_path = folder_path / f"{self.id}.json"
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
 
@@ -74,15 +71,30 @@ class Scenario:
     def load(file_path: Path) -> "Scenario":
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         roles = [Role(**r) for r in data.get("roles", [])]
+
+        # cast timestamps
+        created_at = data.get("created_at")
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+        else:
+            created_at = datetime.now()
+
+        modified_at = data.get("modified_at")
+        if isinstance(modified_at, str):
+            modified_at = datetime.fromisoformat(modified_at)
+        else:
+            modified_at = datetime.now()
+
         return Scenario(
             project_id=data["project_id"],
             name=data["name"],
             description=data.get("description", ""),
             author=data.get("author", ""),
             id=data.get("id", str(uuid.uuid4())),
-            created_at=data.get("created_at", datetime.now().isoformat()),
-            modified_at=data.get("modified_at", datetime.now().isoformat()),
+            created_at=created_at,
+            modified_at=modified_at,
             roles=roles,
             regionalization_completed=data.get("regionalization_completed", False),
             week_distribution_completed=data.get("week_distribution_completed", False),
@@ -95,11 +107,24 @@ class Scenario:
     def load_all(folder: Path) -> List["Scenario"]:
         folder.mkdir(parents=True, exist_ok=True)
         scenarios = []
-        for file_path in folder.glob("*.json"):
-            try:
-                scenarios.append(Scenario.load(file_path))
-            except Exception as e:
-                print(f"Failed to load {file_path}: {e}")
+
+        for subfolder in folder.iterdir():
+            if subfolder.is_dir():
+                json_path = subfolder / f"{subfolder.name}.json"
+                if json_path.exists():
+                    try:
+                        scenarios.append(Scenario.load(json_path))
+                    except Exception as e:
+                        print(f"⚠️ Failed to load {json_path}: {e}")
+                else:
+                    print(f"⚠️ No JSON file found in {subfolder}")
+
+        # for file_path in folder.glob("*.json"):
+        #     try:
+        #         scenarios.append(Scenario.load(file_path))
+        #     except Exception as e:
+        #         print(f"Failed to load {file_path}: {e}")
+
         return scenarios
 
 

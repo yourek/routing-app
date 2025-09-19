@@ -22,14 +22,14 @@ params_path = project_data_path / "input_parameters.json"
 
 # Default params
 defaults = {
-    "working_hours": 160,
+    "working_hours": 170,
     "time_in_store": 83,
     "working_days": 20,
     "work_start": "08:30",
     "work_end": "17:30",
     "lunch_break": 30,
     "parking_delay": 5,
-    "week_schedule": "Monday - Friday",
+    "week_schedule": "Sunday - Thursday",
     "consider_delivery": True,
     "road_traffic": False,
 }
@@ -234,5 +234,5 @@ with save_button:
         st.rerun()
 
 
-st.subheader("Current Parameters")
-st.json(st.session_state.get("input_parameters", input_parameter_dict), expanded=True)
+# st.subheader("Current Parameters")
+# st.json(st.session_state.get("input_parameters", input_parameter_dict), expanded=True)

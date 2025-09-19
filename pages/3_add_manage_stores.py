@@ -34,7 +34,10 @@ COLUMN_DTYPES = {
     "Chain": "str",
     "City": "str",
     "Street": "str",
-    "Segment / Group": "str",
+    "Channel": "str",
+    "Sales Avg": "Float64",
+    "Group": "str",
+    "Grading": "str",
     "Latitude": "float",
     "Longitude": "float",
     "Sunday": "bool",
@@ -42,10 +45,10 @@ COLUMN_DTYPES = {
     "Tuesday": "bool",
     "Wednesday": "bool",
     "Thursday": "bool",
-    "Sales Rep - Visit Frequency": "int",
-    "Sales Rep - Monthly Hours": "int",
-    "Merchandiser - Visit Frequency": "int",
-    "Merchandiser - Monthly Hours": "int",
+    "Sales Rep - Visit Frequency": "Float64",
+    "Sales Rep - Monthly Hours": "Float64",
+    "Merchandiser - Visit Frequency": "Float64",
+    "Merchandiser - Monthly Hours": "Float64",
 }
 
 ID_COL = "Customer"
@@ -116,7 +119,12 @@ with st.sidebar:
     if uploaded_file is not None:
         try:
             df_up = pd.read_excel(
-                uploaded_file, sheet_name="Data", engine="openpyxl", dtype=COLUMN_DTYPES
+                uploaded_file,
+                sheet_name="Data",
+                engine="openpyxl",
+                keep_default_na=True,
+                na_values=["NA", ""],
+                dtype=COLUMN_DTYPES,
             )
             df_up = validate_and_align_columns(df_up, COLUMN_DTYPES)
             df_up = df_up.sort_values(by=ID_COL).reset_index(drop=True)

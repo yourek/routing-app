@@ -17,6 +17,7 @@ from utils.dataframe_utils import (
     validate_and_align_columns,
     validate_new_row_addition,
 )
+from utils.date_utils import ensure_datetime
 
 
 init_session()
@@ -32,6 +33,9 @@ project_id = active_project["id"]
 # Create project data folder if not created
 SCENARIO_FOLDER = Path("data") / "projects_data" / project_id / "scenarios"
 SCENARIO_FOLDER.mkdir(parents=True, exist_ok=True)
+
+# SCENARIO_FOLDER = Path("data") / "projects_data" / project_id / "scenarios"
+# SCENARIO_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # # Create a scenario
 # scenario = Scenario(project_id="project_123", name="Scenario 1", author="Alice")
@@ -75,15 +79,16 @@ def new_metadata_section():
         #     """,
         #     unsafe_allow_html=True,
         # )
-        created_at = datetime.fromisoformat(s.created_at)
-        modified_at = datetime.fromisoformat(s.modified_at)
+        created_at = ensure_datetime(s.created_at)
+        modified_at = ensure_datetime(s.modified_at)
+
         metadata_items = {
             "Name": s.name,
             "Description": s.description or "-",
             "Author": s.author,
             "ID": s.id,
-            "Created": created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "Modified": modified_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "Created": created_at.strftime("%Y-%m-%d %H:%M"),
+            "Modified": modified_at.strftime("%Y-%m-%d %H:%M"),
         }
 
         meta_html = ""
@@ -101,45 +106,253 @@ def new_metadata_section():
             """,
             unsafe_allow_html=True,
         )
-        # Bottom container: Roles
-        roles_html = "".join(
-            f"<div style='display:inline-block; background-color:#d9eaf7; padding:5px 10px; border-radius:6px; margin:3px;'>{r.name}</div>"
-            for r in s.roles
-        )
-        # Add "Add Role" button with + icon
-        roles_html += "<div style='display:inline-block; background-color:#e0e0e0; padding:5px 10px; border-radius:6px; margin:3px; cursor:pointer;'>+ Add Role</div>"
 
-        st.markdown(
-            f"""
-            <div style="background-color:#f0f2f6; padding:10px; border-radius:8px;">
-                <h4 style="margin-top:0;">Roles</h4>
-                {roles_html}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        with st.container(border=True):
+            st.subheader("Roles within a scenario")
 
-        # with st.container(border=True):
-        #     # Bottom container: Roles
-        #     roles_html = "".join(
-        #         f"<div style='display:inline-block; background-color:#d9eaf7; padding:5px 10px; border-radius:6px; margin:3px;'>{r.name}</div>"
-        #         for r in s.roles
-        #     )
-        #     # Add "Add Role" button with + icon
-        #     roles_html += "<div style='display:inline-block; background-color:#e0e0e0; padding:5px 10px; border-radius:6px; margin:3px; cursor:pointer;'>+ Add Role</div>"
+            roles = s.roles
+            if roles:
+                chunk_size = 3  # max cards per row
+                for i in range(0, len(roles), chunk_size):
+                    row_roles = roles[i : i + chunk_size]
+                    cols = st.columns(len(row_roles))
+                    for col, role in zip(cols, row_roles):
+                        with col:
+                            # Card with name + description + buttons
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    border: 1px solid #ccc; 
+                                    border-radius: 8px; 
+                                    padding: 12px; 
+                                    background-color: #f9f9f9;
+                                    min-height: 120px;
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: space-between;
+                                ">
+                                    <h4 style="margin: 0;">{role.name}</h4>
+                                    <p style="margin: 4px 0 0 0; font-size: 0.9em; color: #555;"><b>Description:</b> {role.description or '-'}</p>
+                                    <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #333;">
+                                        <b>Default Visits/Month:</b> {role.default_visits}<br>
+                                        <b>Default Hours/Month:</b> {role.default_hours}
+                                    </p>
+                                    <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #333;">
+                                        <b>Visits Window vs Delivery Dates:</b> {role.visits_window[0]}h to {role.visits_window[1]}h
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
-        #     st.markdown(
-        #         f"""
-        #         <div style="background-color:#f0f2f6; padding:10px; border-radius:8px;">
-        #             <h4 style="margin-top:0;">Roles</h4>
-        #             {roles_html}
-        #         </div>
-        #         """,
-        #         unsafe_allow_html=True,
-        #     )
-        #     st.button("+Add Role", key="edit_metadata_btn", use_container_width=False)
-        #     st.write("ema ziom")  # spacer
+                            # Buttons below card
+                            edit_col, delete_col = st.columns([1, 1])
+                            with edit_col:
+                                if st.button("✏️ Edit", key=f"edit_{role.id}"):
+                                    st.session_state.editing_role_id = role.id
+                                    st.rerun()
+                            with delete_col:
+                                # Check if this role is pending delete
+                                pending_delete = (
+                                    st.session_state.get("pending_delete_role_id")
+                                    == role.id
+                                )
 
+                                if pending_delete:
+                                    st.warning(f"⚠️ Confirm deletion of '{role.name}'?")
+                                    confirm_col, cancel_col = st.columns([1, 1])
+                                    with confirm_col:
+                                        if st.button(
+                                            "✅ Yes", key=f"confirm_{role.id}"
+                                        ):
+                                            s.roles = [
+                                                r for r in s.roles if r.id != role.id
+                                            ]
+                                            s.save(SCENARIO_FOLDER)
+                                            st.session_state.pop(
+                                                "pending_delete_role_id", None
+                                            )
+                                            st.rerun()
+                                    with cancel_col:
+                                        if st.button("❌ No", key=f"cancel_{role.id}"):
+                                            st.session_state.pop(
+                                                "pending_delete_role_id", None
+                                            )
+                                            st.rerun()
+                                else:
+                                    if st.button("🗑️ Delete", key=f"delete_{role.id}"):
+                                        st.session_state["pending_delete_role_id"] = (
+                                            role.id
+                                        )
+                                        st.rerun()
+
+            else:
+                st.info("No roles created yet.")
+
+            if "role_expander_open" not in st.session_state:
+                st.session_state.role_expander_open = False
+
+            editing_role = None
+            if "editing_role_id" in st.session_state:
+                editing_role = next(
+                    (r for r in s.roles if r.id == st.session_state.editing_role_id),
+                    None,
+                )
+                st.session_state.role_expander_open = True  # expand if editing
+            elif not st.session_state.role_expander_open:
+                st.session_state.role_expander_open = False  # collapsed for new
+
+            # with st.expander("➕ Create New Role", expanded=False):
+            #     with st.form("new_role_form", clear_on_submit=True):
+            #         st.markdown("Define New Role")
+
+            #         # --- Basic info ---
+            #         name = st.text_input("Role Name")
+            #         description = st.text_area("Description")
+
+            #         # --- Defaults ---
+            #         default_visits = st.number_input(
+            #             "Default visits per month", min_value=0, step=1
+            #         )
+            #         default_hours = st.number_input(
+            #             "Default hours per month", min_value=0.0, step=0.5
+            #         )
+
+            #         # --- Visits Window ---
+            #         st.markdown("**Visits Window (relative to Delivery Day)**")
+
+            #         # Slider range: -72h ... +72h (3 days before/after)
+            #         # step = 24h = 1 tick
+            #         visits_window = st.slider(
+            #             "Select allowed visit window (hours relative to Delivery Day)",
+            #             min_value=-72,
+            #             max_value=72,
+            #             value=(0, 24),  # default: delivery day to +24h
+            #             step=24,
+            #             format="%d h",
+            #             help="0h = Delivery Day, +24h = next day, -24h = previous day",
+            #         )
+
+            #         # Delivery Day reference marker
+            #         st.caption("📍 0h = Delivery Day (reference point)")
+
+            #         # --- Submit button ---
+            #         submitted = st.form_submit_button("✅ Save Role")
+
+            #         if submitted:
+            #             role = Role(
+            #                 project_id=project_id,
+            #                 scenario_id=s.id,
+            #                 name=name,
+            #                 description=description,
+            #                 default_visits=default_visits,
+            #                 default_hours=default_hours,
+            #                 visits_window=visits_window,
+            #             )
+            #             s.add_role(role)
+            #             s.save(SCENARIO_FOLDER)
+
+            #             st.success("Role created successfully!")
+            #             st.json(
+            #                 {
+            #                     "name": name,
+            #                     "description": description,
+            #                     "default_visits": default_visits,
+            #                     "default_hours": default_hours,
+            #                     "visits_window": visits_window,
+            #                 }
+            #             )
+            #             st.rerun()
+
+            # # Expander: expand if editing, otherwise collapsed
+            expander_label = (
+                "➕ Create New Role"
+                if not editing_role
+                else f"✏️ Edit Role: {editing_role.name}"
+            )
+            with st.expander(
+                expander_label, expanded=st.session_state.role_expander_open
+            ):
+                with st.form("new_role_form", clear_on_submit=True):
+                    st.markdown(expander_label)
+
+                    # --- Basic info ---
+                    name = st.text_input(
+                        "Role Name",
+                        value=editing_role.name if editing_role else "",
+                    )
+                    description = st.text_area(
+                        "Description",
+                        value=editing_role.description if editing_role else "",
+                    )
+
+                    # --- Defaults ---
+                    default_visits = st.number_input(
+                        "Default visits per month",
+                        min_value=0,
+                        step=1,
+                        value=editing_role.default_visits if editing_role else 0,
+                    )
+                    default_hours = st.number_input(
+                        "Default hours per month",
+                        min_value=0.0,
+                        step=0.5,
+                        value=editing_role.default_hours if editing_role else 0.0,
+                    )
+
+                    # --- Visits Window ---
+                    st.markdown("**Visits Window (relative to Delivery Day)**")
+                    visits_window = st.slider(
+                        "Select allowed visit window (hours relative to Delivery Day)",
+                        min_value=-72,
+                        max_value=72,
+                        value=editing_role.visits_window if editing_role else (0, 24),
+                        step=24,
+                        format="%d h",
+                        help="0h = Delivery Day, +24h = next day, -24h = previous day",
+                    )
+                    st.caption("📍 0h = Delivery Day (reference point)")
+
+                    # --- Buttons button ---
+                    edit_col, delete_col, rest_col = st.columns([1, 1, 2])
+                    with edit_col:
+                        submitted = st.form_submit_button("✅ Save Role")
+                    with delete_col:
+                        cancelled = st.form_submit_button("❌ Cancel")
+
+                    if cancelled:
+                        if editing_role:
+                            st.session_state.pop("editing_role_id")
+                            st.rerun()
+
+                    if submitted:
+                        if editing_role:
+                            # Update existing role
+                            editing_role.name = name
+                            editing_role.description = description
+                            editing_role.default_visits = default_visits
+                            editing_role.default_hours = default_hours
+                            editing_role.visits_window = visits_window
+
+                            st.session_state.pop("editing_role_id")
+                            st.success(f"Role '{name}' updated successfully!")
+                        else:
+                            # Create new role
+                            role = Role(
+                                project_id=project_id,
+                                scenario_id=s.id,
+                                name=name,
+                                description=description,
+                                default_visits=default_visits,
+                                default_hours=default_hours,
+                                visits_window=visits_window,
+                            )
+                            s.add_role(role)
+                            st.success("Role created successfully!")
+
+                        # Save scenario and rerun to refresh UI
+                        s.save(SCENARIO_FOLDER)
+                        st.session_state.role_expander_open = False
+                        st.rerun()
     # --------------------------
     # RIGHT COLUMN
     # --------------------------
