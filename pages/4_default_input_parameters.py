@@ -5,11 +5,13 @@ from pathlib import Path
 import streamlit as st
 
 from session.session import init_session
-from utils.auth_utils.guards import require_active_project
+from utils.auth_utils.guards import require_active_project, require_authentication
 from utils.dataframe_utils import to_time
 
 init_session()
 require_active_project()
+require_authentication()
+
 
 active_project = st.session_state.get("active_project")
 project_name = active_project["name"]

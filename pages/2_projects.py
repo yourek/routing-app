@@ -10,9 +10,11 @@ from session.session import (
     set_active_project,
 )
 import streamlit as st
+from utils.auth_utils.guards import require_authentication
 
 
 init_session()
+require_authentication()
 
 st.title("🚀 Projects")
 # TODO change it in the future to real user.

@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 
 from session.session import init_session
-from utils.auth_utils.guards import require_active_project
+from utils.auth_utils.guards import require_active_project, require_authentication
 from db.scenarios import Role, Scenario
 from utils.dataframe_utils import (
     filter_dataframe,
@@ -22,6 +22,7 @@ from utils.date_utils import ensure_datetime
 
 init_session()
 require_active_project()
+require_authentication()
 
 st.title("🧩 Add & Manage Scenarios")
 
