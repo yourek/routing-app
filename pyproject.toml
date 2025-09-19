@@ -1,0 +1,24 @@
+[project]
+name = "italian-confectionery-app"
+version = "0.1.0"
+description = ""
+authors = [{ name = "Rafal Bartko", email = "Rafal.Bartko@kearney.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas (>=2.3.2,<3.0.0)",
+    "pyarrow (>=21.0.0,<22.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "ipykernel (>=6.30.1,<7.0.0)",
+    "streamlit (>=1.49.1,<2.0.0)",
+    "extra-streamlit-components (>=0.1.81,<0.2.0)",
+    "streamlit-authenticator (>=0.4.2,<0.5.0)",
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

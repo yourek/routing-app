@@ -1,0 +1,21 @@
+# theme.py
+
+# Colors
+PRIMARY_COLOR = "#4CAF50"
+SECONDARY_COLOR = "#FF9800"
+CANCEL_COLOR = "#F44336"
+BACKGROUND_COLOR = "#212121"
+SIDEBAR_BG_COLOR = "#1a1a1a"
+TEXT_COLOR = "#FFFFFF"
+HEADER_BG_COLOR = "#212121"
+HEADER_TEXT_COLOR = "#FFFFFF"
+BORDER_COLOR = "#555555"
+INPUT_BG_COLOR = "#333333"
+
+# Spacing / sizes
+NAVBAR_HEIGHT = "60px"
+BORDER_RADIUS = "6px"
+PADDING = "0.5rem 1rem"
+
+# Fonts
+FONTS = {"title": "28px", "body": "16px", "icon": "24px"}

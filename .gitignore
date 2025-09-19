@@ -1,0 +1,9 @@
+.venv
+poetry.lock
+
+.python-version
+
+__pycache__/
+
+data/*.json
+data/**/*.json

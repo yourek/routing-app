@@ -1,0 +1,65 @@
+.st-key-green_button button {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.st-key-cancel_button button {
+    background-color: var(--cancel-color);
+    color: white;
+}
+
+.st-key-logout_btn button {
+    background-color: var(--cancel-color);
+    color: white;
+}
+
+.st-key-absolute-button-logout {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1010;
+}
+
+.st-key-absolute-button-logout button:hover {
+    background-color: #fff;
+    transform: scale(1.05);
+    /* slight zoom */
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+
+/* Hide element containers that only contain a 0-height iframe */
+.stElementContainer:has(iframe[height="0"]) {
+    display: none !important;
+}
+
+.stElementContainer iframe[height="0"] {
+    display: none !important;
+}
+
+.stElementContainer:empty {
+    display: none !important;
+}
+
+/* Hide element containers that only contain a <style> tag */
+.stElementContainer:has(style) {
+    display: none !important;
+}
+
+.stElementContainer:has(> style:only-child) {
+    display: none !important;
+}
+
+.stElementContainer:has(.custom-navbar) {
+    display: block !important;
+}
+
+div[data-testid="stTabs"] p {
+    /* background-color: var(--primary-color); */
+    font-size: 24px !important;
+    /* adjust as needed */
+    font-weight: 600;
+    /* optional: make it bold */
+    padding: 6px 12px;
+    /* optional: increase padding */
+}
