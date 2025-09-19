@@ -21,8 +21,8 @@ from utils.date_utils import ensure_datetime
 
 
 init_session()
-require_active_project()
 require_authentication()
+require_active_project()
 
 st.title("🧩 Add & Manage Scenarios")
 

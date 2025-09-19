@@ -9,8 +9,8 @@ from utils.auth_utils.guards import require_active_project, require_authenticati
 from utils.dataframe_utils import to_time
 
 init_session()
-require_active_project()
 require_authentication()
+require_active_project()
 
 
 active_project = st.session_state.get("active_project")

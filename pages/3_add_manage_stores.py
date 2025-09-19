@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from session.session import init_session
-from utils.auth_utils.guards import require_active_project
+from utils.auth_utils.guards import require_active_project, require_authentication
 from utils.dataframe_utils import (
     filter_dataframe,
     gen_randkey,
@@ -17,6 +17,7 @@ from utils.dataframe_utils import (
 from db.db_operations import upsert_delete
 
 init_session()
+require_authentication()
 require_active_project()
 
 active_project = st.session_state.get("active_project")
