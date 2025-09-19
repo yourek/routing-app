@@ -34,6 +34,7 @@ project_id = active_project["id"]
 SCENARIO_FOLDER = Path("data") / "projects_data" / project_id / "scenarios"
 SCENARIO_FOLDER.mkdir(parents=True, exist_ok=True)
 
+
 # SCENARIO_FOLDER = Path("data") / "projects_data" / project_id / "scenarios"
 # SCENARIO_FOLDER.mkdir(parents=True, exist_ok=True)
 
@@ -401,31 +402,33 @@ if st.session_state.selected_scenario is None:
             "\\+ Create a new scenario", key="create_btn", use_container_width=False
         ):
             # Create a scenario
-            description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-            scenario = Scenario(
-                project_id=project_id,
-                name=f"Scenario {clicker + 1}",
-                author="admin",
-                description=description,
-            )
-            if clicker == 0:
-                scenario.add_role(Role("Sales Representative"))
-                scenario.add_role(Role("Merchandiser"))
-            elif clicker == 1:
-                scenario.add_role(Role("Junior Sales Representative"))
-                scenario.add_role(Role("Senior Sales Representative"))
-                scenario.add_role(Role("Merchandiser"))
-            elif clicker == 2:
-                scenario.add_role(Role("Junior Sales Representative"))
-                scenario.add_role(Role("Senior Sales Representative"))
-                scenario.add_role(Role("Junior Merchandiser"))
-                scenario.add_role(Role("Senior Merchandiser"))
+            # description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+            # scenario = Scenario(
+            #     project_id=project_id,
+            #     name=f"Scenario {clicker + 1}",
+            #     author="admin",
+            #     description=description,
+            # )
+            # if clicker == 0:
+            #     scenario.add_role(Role("Sales Representative"))
+            #     scenario.add_role(Role("Merchandiser"))
+            # elif clicker == 1:
+            #     scenario.add_role(Role("Junior Sales Representative"))
+            #     scenario.add_role(Role("Senior Sales Representative"))
+            #     scenario.add_role(Role("Merchandiser"))
+            # elif clicker == 2:
+            #     scenario.add_role(Role("Junior Sales Representative"))
+            #     scenario.add_role(Role("Senior Sales Representative"))
+            #     scenario.add_role(Role("Junior Merchandiser"))
+            #     scenario.add_role(Role("Senior Merchandiser"))
 
             # st.write(scenario.to_dict())
             # Save to JSON
-            scenario.save(SCENARIO_FOLDER)
-            clicker += 1
-            st.session_state["clicker"] = clicker
+            # scenario.save(SCENARIO_FOLDER)
+            # clicker += 1
+            # st.session_state["clicker"] = clicker
+            st.session_state.create_mode = True
+            st.session_state.editing_scenario_id = None
             st.rerun()
             # # Prepare an unsaved draft and open the edit dialog
             # draft = new_project_draft(author=USER)
@@ -481,9 +484,15 @@ if st.session_state.selected_scenario is None:
                         )
 
                         # Bottom: Open button
-                        if st.button("Open", key=f"open_{s.id}"):
-                            st.session_state.selected_scenario = s
-                            st.rerun()
+                        left_col, right_col = st.columns([1, 1])
+                        with left_col:
+                            if st.button("Open", key=f"open_{s.id}"):
+                                st.session_state.selected_scenario = s
+                                st.rerun()
+                        with right_col:
+                            if st.button("✏️ Edit", key=f"edit_{s.id}"):
+                                st.session_state.editing_scenario_id = s.id
+                                st.session_state.create_mode = False
 
                         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -816,3 +825,72 @@ else:
     with tab4:
         st.subheader("Chart 2")
         st.bar_chart(np.random.randn(10, 4))
+
+
+if "editing_scenario_id" not in st.session_state:
+    st.session_state.editing_scenario_id = None
+if "create_mode" not in st.session_state:
+    st.session_state.create_mode = False
+
+
+# --- Sidebar form ---
+def scenario_sidebar_form(is_new=True, scenario_obj=None):
+    if st.session_state.create_mode or st.session_state.editing_scenario_id:
+        st.sidebar.markdown(f"### {'Create Scenario' if is_new else 'Edit Scenario'}")
+        form_key = f"form_edit_{scenario_obj.id}" if scenario_obj else "form_create"
+        with st.sidebar.form(form_key, clear_on_submit=False):
+            name = st.text_input(
+                "Name", value=scenario_obj.name if scenario_obj else ""
+            )
+            description = st.text_area(
+                "Description", value=scenario_obj.description if scenario_obj else ""
+            )
+            author = st.text_input(
+                "Author", value=scenario_obj.author if scenario_obj else "admin"
+            )
+            # left_col_form, right_col_form = st.columns([1, 1])
+            # with left_col_form:
+            submitted = st.form_submit_button(
+                "Save Scenario", type="primary", use_container_width=True
+            )
+            # with right_col_form:
+            cancelled = st.form_submit_button("Cancel", use_container_width=True)
+
+            if submitted:
+                if is_new:
+                    new_scenario = Scenario(
+                        project_id=project_id,
+                        name=name,
+                        description=description,
+                        author=author,
+                    )
+                    new_scenario.save(SCENARIO_FOLDER)
+                    st.success("Scenario created successfully!")
+                    st.session_state.create_mode = False
+                else:
+                    # Edit existing scenario
+                    scenario_obj.name = name
+                    scenario_obj.description = description
+                    scenario_obj.author = author
+                    scenario_obj.modified_at = datetime.now()
+                    scenario_obj.save(SCENARIO_FOLDER)
+                    st.success("Scenario updated successfully!")
+                    st.session_state.editing_scenario_id = None
+
+                st.rerun()
+
+            if cancelled:
+                st.session_state.create_mode = False
+                st.session_state.editing_scenario_id = None
+                st.rerun()
+
+
+# --- Show sidebar form ---
+editing_scenario = None
+if st.session_state.editing_scenario_id:
+    editing_scenario = next(
+        (s for s in all_scenarios if s.id == st.session_state.editing_scenario_id),
+        None,
+    )
+
+scenario_sidebar_form(is_new=(editing_scenario is None), scenario_obj=editing_scenario)
