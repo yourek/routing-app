@@ -75,5 +75,5 @@ tzdata==2025.2 ; python_version >= "3.12"
 urllib3==2.5.0 ; python_version >= "3.12"
 watchdog==6.0.0 ; python_version >= "3.12" and platform_system != "Darwin"
 wcwidth==0.2.13 ; python_version >= "3.12"
-folium ==0.14.0 ; python_version >= "3.12"
-matplotlib ==3.8.0 ; python_version >= "3.12"
+folium
+matplotlib
