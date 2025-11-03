@@ -77,3 +77,4 @@ watchdog==6.0.0 ; python_version >= "3.12" and platform_system != "Darwin"
 wcwidth==0.2.13 ; python_version >= "3.12"
 folium
 matplotlib
+geopandas
