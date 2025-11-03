@@ -1,9 +1,17 @@
 .venv
+.pkl
 poetry.lock
 
 .python-version
 
 __pycache__/
 
+assets/**/*.pkl
+
 data/*.json
 data/**/*.json
+data/**/*.xlsx
+data/**/*.html
+data/**/*.parquet
+
+config/application_default_credentials.json

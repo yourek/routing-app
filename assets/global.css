@@ -54,12 +54,25 @@
     display: block !important;
 }
 
-div[data-testid="stTabs"] p {
+.st-key-adjustment-button p {
+    font-size: 16px !important;
+}
+
+div[data-testid="stTabs"] button>div>p {
     /* background-color: var(--primary-color); */
-    font-size: 24px !important;
+    font-size: 24px;
+    /* size: 24px !important; */
     /* adjust as needed */
     font-weight: 600;
     /* optional: make it bold */
     padding: 6px 12px;
     /* optional: increase padding */
+}
+
+.st-key-yes_update_stores_metadata p {
+    font-size: 16px !important;
+}
+
+.st-key-cancel_update_stores_metadata p {
+    font-size: 16px !important;
 }

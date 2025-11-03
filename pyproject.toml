@@ -1,23 +1,34 @@
-[project]
+[tool.poetry]
 name = "italian-confectionery-app"
 version = "0.1.0"
 description = ""
-authors = [{ name = "Rafal Bartko", email = "Rafal.Bartko@kearney.com" }]
+authors = ["Rafal Bartko <Rafal.Bartko@kearney.com>"]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "pandas (>=2.3.2,<3.0.0)",
-    "pyarrow (>=21.0.0,<22.0.0)",
-    "openpyxl (>=3.1.5,<4.0.0)",
-    "tqdm (>=4.67.1,<5.0.0)",
-    "ipykernel (>=6.30.1,<7.0.0)",
-    "streamlit (>=1.49.1,<2.0.0)",
-    "extra-streamlit-components (>=0.1.81,<0.2.0)",
-    "streamlit-authenticator (>=0.4.2,<0.5.0)",
-]
-
-[tool.poetry]
 package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+pandas = ">=2.3.2,<3.0.0"
+pyarrow = ">=21.0.0,<22.0.0"
+openpyxl = ">=3.1.5,<4.0.0"
+tqdm = ">=4.67.1,<5.0.0"
+ipykernel = ">=6.30.1,<7.0.0"
+streamlit = ">=1.49.1,<2.0.0"
+extra-streamlit-components = ">=0.1.81,<0.2.0"
+streamlit-authenticator = ">=0.4.2,<0.5.0"
+streamlit-extras = "^0.7.8"
+k-means-constrained = ">=0.7.6,<0.8.0"
+geopandas = ">=1.1.1,<2.0.0"
+folium = ">=0.20.0,<0.21.0"
+mapclassify = ">=2.10.0,<3.0.0"
+matplotlib = ">=3.10.5,<4.0.0"
+alphashape = "^1.3.1"
+google-maps-routeoptimization = ">=0.1.11,<0.2.0"
+polyline = ">=2.0.3,<3.0.0"
+igraph = "^0.11.9"
+osmnx = "^2.0.6"
+networkx = "^3.5"
+distinctipy = "^1.3.4"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

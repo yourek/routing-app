@@ -25,7 +25,7 @@ project_name = active_project["name"]
 project_id = active_project["id"]
 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-project_data_path = Path("data") / "projects_data" / project_id
+project_data_path = Path("data") / "projects" / project_id
 project_data_path.mkdir(parents=True, exist_ok=True)
 stores_json_path = project_data_path / "stores.json"
 
@@ -36,9 +36,9 @@ COLUMN_DTYPES = {
     "City": "str",
     "Street": "str",
     "Channel": "str",
-    "Sales Avg": "Float64",
     "Group": "str",
     "Grading": "str",
+    "Sales Avg": "float",
     "Latitude": "float",
     "Longitude": "float",
     "Sunday": "bool",
@@ -46,10 +46,8 @@ COLUMN_DTYPES = {
     "Tuesday": "bool",
     "Wednesday": "bool",
     "Thursday": "bool",
-    "Sales Rep - Visit Frequency": "Float64",
-    "Sales Rep - Monthly Hours": "Float64",
-    "Merchandiser - Visit Frequency": "Float64",
-    "Merchandiser - Monthly Hours": "Float64",
+    "Friday": "bool",
+    "Saturday": "bool",
 }
 
 ID_COL = "Customer"
@@ -103,6 +101,8 @@ column_config = {
 with st.sidebar:
     st.subheader("Load / Save")
 
+    st.session_state["uploader_key"] = "uploader_stores"
+
     # Choose load mode: Replace (overwrite) or Update (upsert)
     load_mode = st.radio(
         "Load mode",
@@ -119,6 +119,7 @@ with st.sidebar:
 
     if uploaded_file is not None:
         try:
+            uploaded_file.seek(0)
             df_up = pd.read_excel(
                 uploaded_file,
                 sheet_name="Data",
@@ -127,6 +128,20 @@ with st.sidebar:
                 na_values=["NA", ""],
                 dtype=COLUMN_DTYPES,
             )
+            weekdays = [
+                "Sunday",
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+            ]
+            for weekday in weekdays:
+                if weekday in df_up.columns:
+                    df_up[weekday] = df_up[weekday].fillna(False)
+                else:
+                    df_up[weekday] = False
             df_up = validate_and_align_columns(df_up, COLUMN_DTYPES)
             df_up = df_up.sort_values(by=ID_COL).reset_index(drop=True)
 
@@ -200,8 +215,16 @@ if st.session_state["show_editor"]:
         height=TABLE_HEIGHT,
     )
 
+    def clean_value(x):
+        if isinstance(x, float) and x.is_integer():
+            return str(int(x))
+        return x
+
+    edited["Customer"] = edited["Customer"].apply(clean_value)
+
     if save_clicked:
         try:
+            # breakpoint()
             changed = edited.copy()
 
             validate_new_row_addition(changed, ID_COL, COLUMN_DTYPES)

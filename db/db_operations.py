@@ -1,6 +1,7 @@
 from pathlib import Path
 import pandas as pd
 from typing import Iterable
+import shutil
 
 
 def upsert_delete(
@@ -44,3 +45,13 @@ def upsert_delete(
 
     result.to_json(json_path, orient="records", indent=2)
     return result
+
+
+def delete_folder_with_data(path_to_delete):
+    if path_to_delete.exists():
+        shutil.rmtree(path_to_delete)
+
+
+def copy_folder_to_another(src, dst):
+    if src.exists():
+        shutil.copytree(src, dst, dirs_exist_ok=True)

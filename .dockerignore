@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.git
+.gitignore
+.vscode
+tests/
+notebooks/
+*.log
+data/*.json
+data/**/*.json
+data/**/*.xlsx
+data/**/*.html
+data/**/*.parquet

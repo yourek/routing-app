@@ -1,13 +1,15 @@
 credentials:
   usernames:
-    jsmith:
+    tomerh:
       email: jsmith@gmail.com
       name: John Smith
-      password: abc # To be replaced with hashed password
-    rbriggs:
+      password: D2azniMTV0pNdziq5MP5
+    tommyk:
       email: rbriggs@gmail.com
       name: Rebecca Briggs
-      password: def # To be replaced with hashed password
+      password: qxLGnCP7wyZ0AHPpsH9z
+    admin:
+      password: 5}UiAoMK3xP4^3*4ciNK
 cookie:
   expiry_days: 30
   key: random_signature_key
@@ -15,3 +17,35 @@ cookie:
 preauthorized:
   emails:
   - melsby@gmail.com
+stores_input_dtypes:
+  Customer: str
+  Stores: str
+  Chain: str
+  City: str
+  Street: str
+  Channel: str
+  Group: str
+  Grading: str
+  Sales Avg: float
+  Latitude: float
+  Longitude: float
+  Sunday: bool
+  Monday: bool
+  Tuesday: bool
+  Wednesday: bool
+  Thursday: bool
+  Friday: bool
+  Saturday: bool
+project_default_input_params:
+  working_hours: 170
+  time_in_store: 83
+  working_days: 20
+  work_start: "08:30"
+  work_end: "17:00"
+  lunch_break: 30
+  parking_delay: 5
+  week_schedule: "Sunday - Thursday"
+  consider_delivery: True
+  road_traffic: False
+  other_idle_times: []
+g_routing_cost_est_factor: 0.6

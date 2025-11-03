@@ -1,0 +1,11 @@
+from datetime import datetime, time
+
+
+BASE_DATE = datetime(2025, 8, 31)
+
+WEEKS_IN_MONTH = 4
+SECONDS_IN_HOUR = 3600
+SECONDS_IN_MINUTE = 60
+METERS_IN_KM = 1000
+
+MONTH_TO_FOUR_WEEKS_ADJUSTER = 20 / 20

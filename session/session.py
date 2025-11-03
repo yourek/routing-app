@@ -42,7 +42,11 @@ def init_session():
 def set_active_project(project_id: str):
     """Set the active project both in session_state and cookies."""
     st.session_state.active_project = project_id
-    st.session_state.active_scenario = None  # Reset scenario when project changes
+    if "selected_scenario" in st.session_state:
+        st.session_state.selected_scenario = None  # Reset scenario when project changes
+    if "other_idle_times" in st.session_state:
+        del st.session_state["other_idle_times"]
+
     cookie_manager.set("active_project", project_id, key="active_project_cookie")
 
 

@@ -107,3 +107,13 @@ Open it in your browser if not opened automatically.
 
 * Any `.py` files inside the `pages/` folder become additional pages automatically.
 * Use the sidebar page selector in the running app.
+
+
+# Docker deployment on Azure
+* docker build -t route-optimization-demo .
+* docker load -i route-optimization-demo.tar (if loading a tar)
+* az login
+* az acr login --name dcoettacr
+* docker tag route-optimization-demo dcoettacr.azurecr.io/route-optimization-demo
+* docker push dcoettacr.azurecr.io/route-optimization-demo
+* az webapp restart --name route-optimization-demo --resource-group tt

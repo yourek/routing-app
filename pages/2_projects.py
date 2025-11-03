@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+from db.db_operations import copy_folder_to_another
 from db.projects import delete_project, load_projects, save_project
 from session.session import (
     get_active_project,
@@ -10,8 +11,10 @@ from session.session import (
     set_active_project,
 )
 import streamlit as st
+import yaml
 from utils.auth_utils.guards import require_authentication
 
+import shutil
 
 init_session()
 require_authentication()
@@ -23,9 +26,13 @@ auth_user = get_active_user()
 USER = auth_user["username"] if auth_user else "unknown user"
 
 
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+
 def new_project_draft(author: str | None = None):
     """Return an unsaved project dict. Nothing is written to disk yet."""
-    pid = f"project_{uuid4().hex[:8]}"
+    pid = uuid4().hex[:8]
     draft = {
         "id": pid,
         "name": "New Project",
@@ -136,6 +143,30 @@ else:
                             "Delete", key=f"del_{proj['id']}", use_container_width=True
                         ):
                             st.session_state["delete_confirm_id"] = proj["id"]
+
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        if st.button(
+                            "Clone Project",
+                            key=f"clone_{proj['id']}",
+                            use_container_width=True,
+                        ):
+                            # Create a new project draft based on the existing one
+                            st.session_state["edit_id"] = proj[
+                                "id"
+                            ]  # get cloning project id
+                            draft = proj.copy()
+                            draft["id"] = uuid4().hex[:8]  # New unique ID
+                            draft["name"] = f"{draft['name']} (Copy)"
+                            draft["created_at"] = datetime.now().strftime(
+                                "%Y-%m-%d %H:%M"
+                            )
+                            st.session_state["edit_data"] = draft
+                            st.session_state["clone_id"] = draft["id"]
+                            st.session_state["is_new"] = True
+                            st.success("Project cloned. You can now edit and save it.")
+                            st.rerun()
+
                     # close actions
                     st.markdown("</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)  # close card
@@ -146,6 +177,7 @@ edit_id = st.session_state.get("edit_id")
 if edit_id:
     # Determine whether this is a new (unsaved) project or an existing one
     is_new = st.session_state.get("is_new", False)
+    is_cloning = st.session_state.get("clone_id", False)
 
     # For existing: find from disk; for new: use session draft
     proj = None
@@ -159,7 +191,14 @@ if edit_id:
 
     if proj:
         with st.sidebar:
-            st.markdown("### " + ("Create Project" if is_new else "Edit Project"))
+            st.markdown(
+                "### "
+                + (
+                    "Cloning Project"
+                    if is_cloning
+                    else "Create Project" if is_new else "Edit Project"
+                )
+            )
             with st.form(f"form_edit_{edit_id}", clear_on_submit=False):
                 name = st.text_input("Name", value=proj.get("name", ""))
                 desc = st.text_area(
@@ -180,17 +219,63 @@ if edit_id:
                         st.stop()
 
                     # Build the final dict for saving
-                    payload = {
-                        "id": edit_id,
-                        "name": name.strip(),
-                        "description": desc.strip(),
-                        "author": author.strip() or "anonymous",
-                        "created_at": proj.get("created_at")
-                        or datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    }
 
                     # Save first (must exist on disk before activation toggles others)
-                    save_project(payload)
+
+                    if is_cloning:
+                        # Copy the entire project folder to a new one
+                        payload = {
+                            "id": edit_id,
+                            "name": name.strip(),
+                            "description": desc.strip(),
+                            "author": author.strip() or "anonymous",
+                            "created_at": proj.get("created_at")
+                            or datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        }
+                        payload["id"] = st.session_state["clone_id"]
+
+                        dst_path = (
+                            Path("data")
+                            / "projects"
+                            / str(st.session_state["clone_id"])
+                        )
+                        src_path = Path("data") / "projects" / str(edit_id)
+                        copy_folder_to_another(src_path, dst_path)
+                        save_project(payload)
+
+                        st.session_state["clone_id"] = False
+
+                    elif is_new:
+                        payload = {
+                            "id": edit_id,
+                            "name": name.strip(),
+                            "description": desc.strip(),
+                            "author": author.strip() or "anonymous",
+                            "created_at": proj.get("created_at")
+                            or datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        }
+                        save_project(payload)
+
+                        project_data_path = Path("data") / "projects" / str(edit_id)
+                        params_path = project_data_path / "input_parameters.json"
+                        input_parameter_dict = config[
+                            "project_default_input_params"
+                        ].copy()
+                        with open(params_path, "w", encoding="utf-8") as f:
+                            json.dump(
+                                input_parameter_dict, f, ensure_ascii=False, indent=2
+                            )
+
+                    else:
+                        payload = {
+                            "id": edit_id,
+                            "name": name.strip(),
+                            "description": desc.strip(),
+                            "author": author.strip() or "anonymous",
+                            "created_at": proj.get("created_at")
+                            or datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        }
+                        save_project(payload)
 
                     # If set active, ensure others are inactive
 
@@ -198,6 +283,7 @@ if edit_id:
                     st.session_state["edit_id"] = None
                     st.session_state["edit_data"] = None
                     st.session_state["is_new"] = False
+                    st.session_state["clone_id"] = False
 
                     st.success("Project saved.")
 

@@ -1,9 +1,13 @@
 import random
 import string
-from datetime import time
+from datetime import datetime, time
 from io import BytesIO
 
+from typing import Tuple
+
 import pandas as pd
+from db.db_operations import upsert_delete
+from params.time_allocation import AVAILABLE_VISIT_FREQUENCIES
 import streamlit as st
 from pandas.api.types import (
     is_bool_dtype,
@@ -13,6 +17,16 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_object_dtype,
 )
+import hashlib
+import warnings
+
+
+warnings.filterwarnings("ignore", message="Could not infer format")
+
+
+def df_hash(df: pd.DataFrame) -> str:
+    """Compact hash representation of dataframe contents"""
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
 
 
 def filter_dataframe(df: pd.DataFrame, enable_filters: bool) -> pd.DataFrame:
@@ -25,7 +39,7 @@ def filter_dataframe(df: pd.DataFrame, enable_filters: bool) -> pd.DataFrame:
       - Object/text columns with dropdown of unique values.
     """
     if not enable_filters:
-        return df
+        return df  # , None, False
 
     df = df.copy()
 
@@ -39,8 +53,11 @@ def filter_dataframe(df: pd.DataFrame, enable_filters: bool) -> pd.DataFrame:
         if is_datetime64_any_dtype(df[col]):
             df[col] = df[col].dt.tz_localize(None)
 
-    with st.container():
+    with st.container(border=True):
+        st.markdown("#### 🔍 Filter data")
+
         to_filter_columns = st.multiselect("Filter dataframe on", df.columns)
+
         for column in to_filter_columns:
             left, right = st.columns((1, 20))
 
@@ -177,6 +194,164 @@ def filter_dataframe(df: pd.DataFrame, enable_filters: bool) -> pd.DataFrame:
     return df
 
 
+def batch_apply_schedule_adjustments(
+    df: pd.DataFrame,
+    scen_metadata: dict | None = None,
+) -> pd.DataFrame:
+
+    if_adj_submitted = False
+    schedule_adjustments = None
+
+    if scen_metadata:
+        with st.expander(
+            "Batch time allocations updater (updates for all filtered rows)"
+        ):
+            role_names = [role["name"] for role in scen_metadata["roles"]]
+            # st.markdown(
+            #     """
+            #     <style>
+            #     /* Make number input boxes narrower */
+            #     div.stNumberInput > div {
+            #         max-width: 180px;  /* adjust as needed */
+            #     }
+            #     div.stSelectbox > div {
+            #         max-width: 180px;  /* adjust width as needed */
+            #     }
+            #     </style>
+            #     """,
+            #     unsafe_allow_html=True,
+            # )
+            cols = st.columns([3, 3, 3, 2])
+            with cols[0]:
+                selected_role = st.selectbox("Role", role_names)
+            with cols[1]:
+                visits_nb = st.selectbox(
+                    "Visits per month [#]", options=AVAILABLE_VISIT_FREQUENCIES
+                )
+            with cols[2]:
+                duration = st.number_input(
+                    "Time in store [hours]",
+                    min_value=0,
+                    max_value=100,
+                    value=0,
+                    step=1,
+                )
+            with cols[3]:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if_adj_submitted = st.button(
+                    "✅ Apply adjustments", key="adjustment-button"
+                )
+                # if if_adj_submitted:
+                #     st.warning(
+                #         f"Are you sure you to modify visits number and time in store?"
+                #     )
+                #     col1, col2 = st.columns(2)
+                #     a, b = False, False
+                #     with col1:
+                #         a = st.button("✅ Yes, modify")
+                #     with col2:
+                #         b = st.button("❌ Cancel")
+                #     print(a, b)
+
+        if if_adj_submitted:
+            schedule_adjustments = {
+                "selected_role": selected_role,
+                "visits_nb": visits_nb,
+                "duration": duration,
+                "indexes_to_modify": df.index,
+            }
+        else:
+            schedule_adjustments = {"indexes_to_modify": df.index}
+
+    return if_adj_submitted, schedule_adjustments
+
+
+def render_editable_table(
+    df,
+    column_config,
+    update_key,
+    data_path,
+    key_pattern=None,
+    cols_to_hide=None,
+    column_order=None,
+):
+    ## HEIGHT
+    ROW_HEIGHT = 35
+    HEADER_HEIGHT = 40
+    MAX_TABLE_HEIGHT = 550
+    dynamic_height = min(HEADER_HEIGHT + len(df) * ROW_HEIGHT, MAX_TABLE_HEIGHT)
+    ##
+
+    entry_df_hash = df_hash(df)
+    session_state_key = f"changes_made_{entry_df_hash}"
+    editor_key_name = f"editor_key_{key_pattern}"
+
+    editor_key = st.session_state.get(editor_key_name, entry_df_hash)
+
+    if not key_pattern:
+        key_pattern = gen_randkey(6)
+
+    if not cols_to_hide:
+        cols_to_hide = []
+
+    if not column_order:
+        column_order = df.columns.tolist()
+
+    cols_to_show = [c for c in column_order if c not in cols_to_hide]
+
+    editable_table = st.data_editor(
+        df,
+        key=editor_key,
+        column_config=column_config,
+        column_order=cols_to_show,
+        height=dynamic_height,
+    )
+    output_df_hash = df_hash(editable_table)
+
+    # st.write(f"**Data entry hash:** {entry_df_hash}")
+
+    if output_df_hash != entry_df_hash:
+        st.session_state[session_state_key] = True
+    else:
+        st.session_state[session_state_key] = False
+
+    if st.session_state.get(session_state_key, False):
+        c_save, c_reset, spacer = st.columns([1, 1, 5], gap="small")
+        if c_save.button("Save changes", type="primary", key=f"save_{key_pattern}"):
+            upsert_delete(
+                edited_df=editable_table,
+                json_path=data_path,
+                key_col=update_key,
+                # deleted_keys=deleted_keys,
+            )
+            st.session_state[session_state_key] = False
+
+            if session_state_key in st.session_state:
+                del st.session_state[session_state_key]
+            if "editor_key" in st.session_state:
+                del st.session_state["editor_key"]
+
+            st.success("Changes saved.")
+            st.rerun()
+        if c_reset.button("Cancel", key=f"cancel_{key_pattern}"):
+            st.session_state[session_state_key] = False
+            st.session_state[editor_key_name] = (
+                f"{entry_df_hash}_{st.session_state.get('reset_counter', 0)+1}"  # new key
+            )
+            st.session_state["reset_counter"] = (
+                st.session_state.get("reset_counter", 0) + 1
+            )
+            st.rerun()
+
+    # filtered = {
+    #     k: v
+    #     for k, v in st.session_state.items()
+    #     if ("changes_made" in k) or ("editor_key" in k)
+    # }
+    # st.write(filtered)
+    # st.write(f"**Data output hash:** {output_df_hash}")
+
+
 def gen_randkey(n=8):
     return "".join(random.choices(string.ascii_letters + string.digits, k=n))
 
@@ -230,12 +405,12 @@ def validate_new_row_addition(changed, id_col, column_dtypes):
         raise ValueError(f"Duplicate {id_col}(s) on insert: {', '.join(offenders)}")
 
     # Empty column validation
-    for col, dtype in column_dtypes.items():
-        if dtype == "bool":  # Skip bool as it defaults to False
-            continue
-        if col in changed and (changed[col].isna().any() or changed[col].eq("").any()):
-            st.error(f"Some rows in '{col}' column have empty values.")
-            raise TypeError("Empty values")
+    # for col, dtype in column_dtypes.items():
+    #     if dtype == "bool":  # Skip bool as it defaults to False
+    #         continue
+    #     if col in changed and (changed[col].isna().any() or changed[col].eq("").any()):
+    #         st.error(f"Some rows in '{col}' column have empty values.")
+    #         raise TypeError("Empty values")
 
     for col, dtype in column_dtypes.items():
         changed[col] = changed[col].astype(dtype)
@@ -266,3 +441,112 @@ def to_time(hhmm: str, fallback: time) -> time:
         return time(h, m)
     except Exception:
         return fallback
+
+
+def download_dataframe(
+    df: pd.DataFrame, output_file_name: str, button_label="Download as XLSX"
+):
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        xlsx_data = to_excel_bytes(df)
+        st.download_button(
+            label=button_label,
+            data=xlsx_data,
+            file_name=f"{output_file_name}_{ts}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        st.error(f"Error preparing download: {e}")
+
+
+def validate_visits_number(df):
+    visits_nb_columns = [c for c in df.columns if " - visits per month" in c]
+    visits_nb_correct = (
+        df[visits_nb_columns].isin(AVAILABLE_VISIT_FREQUENCIES).all().all()
+    )
+
+    return visits_nb_correct
+
+
+def sidebar_load_download_section_from_session_state(
+    dfs_session_key, file_path, project_id, update_columns_key, column_dtypes
+):
+    st.subheader("Load / Save Time Allocation Data")
+
+    if "uploader_key" not in st.session_state:
+        st.session_state["uploader_key"] = "uploader_time_alloc"
+
+    load_mode = st.radio(
+        "Load mode",
+        options=["Replace", "Update"],
+        index=0,
+        horizontal=True,
+        key="load_mode_choice",
+        help="Replace -> overwrites all rows \n\n Update -> upserts rows by Customer ID",
+    )
+
+    uploaded_file = st.file_uploader(
+        "Upload XLSX file",
+        type=["xlsx"],
+        key=st.session_state["uploader_key"],
+    )
+
+    if uploaded_file is not None:
+        try:
+            uploaded_file.seek(0)
+            df_up = pd.read_excel(
+                uploaded_file,
+                sheet_name="Data",
+                engine="openpyxl",
+                dtype=column_dtypes,
+            )
+            df_up = validate_and_align_columns(df_up, column_dtypes)
+            visits_nb_correct = validate_visits_number(df_up)
+            if not visits_nb_correct:
+                st.error(
+                    f"Visits number columns need to have values from range: {str(AVAILABLE_VISIT_FREQUENCIES)}!"
+                )
+                return
+            df_up = df_up.sort_values(by=update_columns_key).reset_index(drop=True)
+            if load_mode == "Replace":
+                st.session_state[dfs_session_key] = df_up
+                df_up.to_json(file_path, orient="records", indent=2)
+                st.success("Loaded XLSX file successfully.")
+            else:
+                result_df = upsert_delete(
+                    edited_df=df_up,
+                    json_path=file_path,
+                    key_col=update_columns_key,
+                    deleted_keys=None,
+                )
+                st.session_state[dfs_session_key] = result_df
+                st.success("Updated table from XLSX successfully.")
+        except Exception as e:
+            st.error(f"Error reading XLSX: {e}")
+
+    download_dataframe(
+        st.session_state[dfs_session_key],
+        project_id,
+        "Download Time Allocation data as XLSX",
+    )
+
+    # # XLSX download -> ALWAYS from canonical DF in session
+    # xlsx_data = to_excel_bytes(st.session_state["stores_w_role_spec"])
+    # st.download_button(
+    #     label="Download current table as XLSX",
+    #     data=xlsx_data,
+    #     file_name=f"{project_id}_{ts}.xlsx",
+    #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # )
+
+
+def convert_date_types_to_string(df):
+    df = df.copy()
+    df = df.astype(
+        {
+            col: "string"
+            for col in df.select_dtypes(include=["datetime", "datetimetz"]).columns
+        }
+    )
+
+    return df

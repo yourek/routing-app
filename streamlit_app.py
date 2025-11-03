@@ -5,6 +5,12 @@ from utils.auth_utils.auth import logout
 from utils.auth_utils.guards import require_authentication
 from utils.styles import load_styles
 
+import os
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+    "config/application_default_credentials.json"
+)
+
 load_styles()
 init_session()
 require_authentication()
@@ -18,7 +24,7 @@ st.set_page_config(
 st.logo("assets/logo.png", size="medium", link=None, icon_image=None)
 
 active_project = st.session_state.get("active_project", None)
-project_name = f"Active project: {active_project["name"]}" if active_project else ""
+project_name = f"Active project: {active_project['name']}" if active_project else ""
 
 # Top navbar block
 st.markdown(
@@ -104,9 +110,7 @@ add_manage_scenarios = st.Page(
 scenario_comparison = st.Page(
     "pages/6_scenario_comparison.py", title="Scenario Comparison"
 )
-documentation = st.Page(
-    "pages/7_documentation.py", title="Documentation"
-)
+documentation = st.Page("pages/7_documentation.py", title="Documentation")
 
 pg = st.navigation(
     pages=[
@@ -116,7 +120,7 @@ pg = st.navigation(
         default_input_parameters,
         add_manage_scenarios,
         scenario_comparison,
-        documentation
+        documentation,
     ]
 )
 

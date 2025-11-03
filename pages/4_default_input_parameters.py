@@ -1,8 +1,12 @@
 import json
 from datetime import datetime, time
 from pathlib import Path
+import yaml
+from copy import deepcopy
+import os
 
 import streamlit as st
+import pandas as pd
 
 from session.session import init_session
 from utils.auth_utils.guards import require_active_project, require_authentication
@@ -18,26 +22,30 @@ project_name = active_project["name"]
 project_id = active_project["id"]
 
 # Create project data folder if not created
-project_data_path = Path("data") / "projects_data" / project_id
+project_data_path = Path("data") / "projects" / project_id
 project_data_path.mkdir(parents=True, exist_ok=True)
 params_path = project_data_path / "input_parameters.json"
 
+stores_path = project_data_path / "stores.json"
+
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+if os.path.exists(stores_path):
+    with open(stores_path, "r") as f:
+        stores = pd.DataFrame(json.load(f))
+        cities = stores["City"].drop_duplicates().sort_values().to_list()
+else:
+    cities = []
+
+
 # Default params
-defaults = {
-    "working_hours": 170,
-    "time_in_store": 83,
-    "working_days": 20,
-    "work_start": "08:30",
-    "work_end": "17:30",
-    "lunch_break": 30,
-    "parking_delay": 5,
-    "week_schedule": "Sunday - Thursday",
-    "consider_delivery": True,
-    "road_traffic": False,
-}
+defaults = config["project_default_input_params"].copy()
+
+SHOW_TIME_IN_STORE = False
 
 # Load JSON if present and use as defaults
-params = defaults.copy()
+params = config["project_default_input_params"].copy()
 try:
     if params_path.exists():
         loaded = json.loads(params_path.read_text(encoding="utf-8"))
@@ -52,16 +60,15 @@ except Exception:
 st.title("⚙️ Default Input Parameters")
 st.markdown(f"for *{project_name}*")
 
-save_button, right = st.columns([1, 1])
+save_button, _, right = st.columns([10, 1, 10])
 
 with save_button:
     # Week schedule (single select box)
-
-    st.subheader("Schedule & Capacity Parameters")
-    week_schedule = st.selectbox(
-        "Week schedule",
-        options=["Sunday - Thursday", "Monday - Friday"],
-        index=["Sunday - Thursday", "Monday - Friday"].index(params["week_schedule"]),
+    week_schedule_options = ["Sunday - Thursday", "Monday - Friday"]
+    week_schedule = st.radio(
+        "Week schedule radio",
+        options=week_schedule_options,
+        index=week_schedule_options.index(params["week_schedule"]),
         help="Select the working week schedule – it can affect the results if traffic is considered",
     )
 
@@ -79,22 +86,29 @@ with save_button:
 
     # Resulting working days a month – capacity (confirm / override)
     working_days = st.number_input(
-        "Default working days in a month",
+        "Working days in a month",
         min_value=0,
         value=params["working_days"],
         step=1,
-        help="Base capacity in days per month. Adjust if needed (e.g., default 20, but actual is 22). "
-        "Model will scale results accordingly.",
+        help="Model optimization is based on monthly capacity - assuming 4 weeks in a month (e.g., 5 days/week * 4 weeks = 20 days/month). ",
+        disabled=True,
     )
+
+    daily_hours = (
+        datetime.combine(datetime.today(), work_end)
+        - datetime.combine(datetime.today(), work_start)
+    ).total_seconds() / 3600
+
+    working_hours_a_month = int(round(working_days * daily_hours, 0))
 
     # Resulting working hours a month – capacity (confirm / override)
     working_hours = st.number_input(
-        "Default working hours in a month",
+        "Working hours in a month",
         min_value=0,
-        value=params["working_hours"],
+        value=working_hours_a_month,
         step=1,
-        help="Maximum monthly working hours available (e.g., 40 hours/week * 4 weeks = 160 hours/month). "
-        "Adjust if needed to override the calculated capacity.",
+        help="Maximum monthly working hours available, which is calculated based on working days in a month and daily working hours (e.g., 20 days/month * 9 hours/day = 180 hours/month). ",
+        disabled=True,
     )
 
     st.subheader("Operational Delays & Constraints")
@@ -110,7 +124,7 @@ with save_button:
 
     # Average parking time per visit (minutes)
     parking_delay = st.number_input(
-        "Average parking time per visit (minutes)",
+        "Average parking time per visit (minutes) - applicable to all the stores",
         min_value=0,
         value=params["parking_delay"],
         step=1,
@@ -119,11 +133,11 @@ with save_button:
 
     # Initialize session state if not already
     if "other_idle_times" not in st.session_state:
-        st.session_state.other_idle_times = []  # start empty
+        st.session_state.other_idle_times = params["other_idle_times"]
 
     # Render inputs for each idle time
     for i, idle in enumerate(st.session_state.other_idle_times):
-        cols = st.columns([2, 1])  # name wider, duration narrower
+        cols = st.columns([1, 1, 1])  # name wider, duration narrower
         with cols[0]:
             st.session_state.other_idle_times[i]["name"] = st.text_input(
                 f"Other idle time name",
@@ -132,6 +146,13 @@ with save_button:
                 help="Provide a descriptive name for this idle time (e.g., Waiting for access, System delays)",
             )
         with cols[1]:
+            st.session_state.other_idle_times[i]["applicable_cities"] = st.multiselect(
+                "Applicable cities (optional)",
+                options=cities,
+                default=idle.get("applicable_cities", []),
+                key=f"applicable_cities_{i}",
+            )
+        with cols[2]:
             st.session_state.other_idle_times[i]["minutes"] = st.number_input(
                 f"Other idle time (minutes)",
                 min_value=0,
@@ -153,46 +174,18 @@ with save_button:
                 st.session_state.other_idle_times.pop()
                 st.rerun()
 
-    # # Initialize session state if not already
-    # if "other_idle_times" not in st.session_state:
-    #     st.session_state.other_idle_times = params.get(
-    #         "other_idle_times", [0]
-    #     )  # start with one
-
-    # # Render inputs for each idle time
-    # for i in range(len(st.session_state.other_idle_times)):
-    #     st.session_state.other_idle_times[i] = st.number_input(
-    #         f"Other idle time {i+1} (minutes)",
-    #         min_value=0,
-    #         value=st.session_state.other_idle_times[i],
-    #         step=5,
-    #         key=f"other_idle_time_{i}",
-    #         help="Additional idle time not captured elsewhere",
-    #     )
-
-    # # Buttons to add/remove idle time rows
-    # cols = st.columns([1, 1])
-    # with cols[0]:
-    #     if st.button("➕ Add another idle time"):
-    #         st.session_state.other_idle_times.append(0)
-    #         st.rerun()
-    # with cols[1]:
-    #     if len(st.session_state.other_idle_times) >= 1:
-    #         if st.button("➖ Remove last idle time"):
-    #             st.session_state.other_idle_times.pop()
-    #             st.rerun()
-
-    # Resulting estimated time in store – up-time (confirm / override)
-
     st.subheader("Operational Parameters")
-    time_in_store = st.slider(
-        "Estimated time in store – up-time (confirm / override) (%)",
-        min_value=0,
-        max_value=100,
-        value=params["time_in_store"],
-        help="Estimated percentage of time spent in stores during working hours. "
-        "Confirm or override the calculated value.",
-    )
+    if SHOW_TIME_IN_STORE:
+        time_in_store = st.slider(
+            "Estimated time in store – up-time (confirm / override) (%)",
+            min_value=0,
+            max_value=100,
+            value=params["time_in_store"],
+            help="Estimated percentage of time spent in stores during working hours. "
+            "Confirm or override the calculated value.",
+        )
+    else:
+        time_in_store = params["time_in_store"]
 
     # Consider delivery dates (boolean checkbox)
     consider_delivery = st.checkbox(
@@ -209,6 +202,18 @@ with save_button:
         help="Consider road traffic in travel time estimations – can increase API costs",
     )
 
+with right:
+    st.markdown(
+        """
+    **Notes & Assumptions:**
+    - These parameters will be used as defaults for all new scenarios within this project
+    - Changes here do not affect automatically existing scenarios. You need to rerun specific engines in existing scenarios to apply the changes
+    - Model is always optimizing the workload assuming 20 working days in a month (4 weeks)
+    - Working hours in a month is calculated based on working days and daily working hours
+    - To apply changes in input parameters you need to click "Save parameters" button
+    """
+    )
+
 input_parameter_dict = {
     "project_id": project_id,
     "working_hours": working_hours,
@@ -221,6 +226,7 @@ input_parameter_dict = {
     "parking_delay": parking_delay,
     "consider_delivery": consider_delivery,
     "week_schedule": week_schedule,
+    "other_idle_times": st.session_state.other_idle_times,
     "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
 }
 
@@ -234,7 +240,3 @@ with save_button:
         with open(params_path, "w", encoding="utf-8") as f:
             json.dump(input_parameter_dict, f, ensure_ascii=False, indent=2)
         st.rerun()
-
-
-# st.subheader("Current Parameters")
-# st.json(st.session_state.get("input_parameters", input_parameter_dict), expanded=True)

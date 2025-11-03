@@ -11,71 +11,154 @@ st.title("📚 Documentation of a model")
 
 st.markdown(
     """
-## Step 1: Store Assignment via Weighted K-Means Clustering
+## Step 1: Regionalization
 ### Objective
-Assign stores to sales representatives in a way that balances workload while considering both working time and travel time.
+Assign stores to sales representatives in a way that balances workload while considering both working and travel time.
 
 ### Inputs
-- **Store data:** location, delivery dates.
+- **Store data:**
+    - IDs
+    - Location
 - **Parameters:** 
-    - Max monthly working capacity e.g. 170 hours
-    - Target workload per region: ~83% of monthly capacity (e.g. ~141 hours)
-    - Workday limits are 8:30 - 17:30 (including 30 minutes lunch break, so effectively max 8.5 hours of work per day)
+    - Working weekdays
+    - Workday time limits
+    - Idles (including lunch breaks, average parking time and possibly others)
+    - Optional: time in store factor - measure of how much time in store single FTE can spend across working hours. If not provided, it will be calculated automatically
+- **Roles**
+    - Role names
+    - Visits number per month (either 0, 1, 2, 4, 8, 12, 16 or 20)
+    - Monthly time in store
 
 ### Approach
-1. Choose the number of clusters such that the average workload per cluster is ~83% of a 170 hours representative’s monthly capacity (~141 hours).
-2. Apply **Weighted Constrained K-Means clustering** to group stores into potential sales representative territories.
-3. Assign weights based on monthly on-site visit duration. For example, if a site requires 4 hours per month, its data point will be duplicated 4 times in the K-Means algorithm.
-1. **Important:** 
-    1. The algorithm does not guarantee that each cluster will remain within the target limit of ~141 hours per region. In extreme cases (especially merchandising), where a site has a high workload (e.g., 50 hours per month) and is located near the boundary of a region, K-Means may split the duplicated points across two clusters (e.g., 30 hours assigned to one cluster and 20 hours to another).
-    2. To resolve this, the site is ultimately assigned to the cluster with the larger share of points. This ensures each site belongs to exactly one cluster. However, this adjustment can disrupt workload balance: removing 20 hours from one cluster and adding them to another may cause the latter to exceed its capacity.
-4. In principle, each cluster is designed to be both:
-    - **Workload balanced** (no representative is over capacity).
-    - **Geographically coherent** (reduces unnecessary travel).
+1. Number of FTEs are calculated automatically per each role. You can manually increase the numbers in the UI.
+2. If time in store factor is not given by the user (left as default 100) engine calculates it using OpenStreetMap API.
+3. Clustering is done with **Weighted Constrained K-Means** model for each role separately.
+    1. Each store has weight assigned based on role monthly time in store. For example, if a site requires 4 hours per month, its data point will be duplicated 4 times in the K-Means algorithm.
+    2. K-Means algorithm performs clustering, not to exceed total monthly FTE capacity.
+    3. Each cluster corresponds to one sales representative.
+4. In the application you can manually change the store - sales representative assignment after review.
+
+**Important:** 
+- The algorithm does not guarantee that each cluster will remain within the target limit per region. In extreme cases, where a site has a high workload (e.g., 50 hours per month) and is located near the boundary of a region, K-Means may split the duplicated points across two clusters (e.g., 30 hours assigned to one cluster and 20 hours to another).
+- To resolve this, the site is ultimately assigned to the cluster with the larger share of points. This ensures each site belongs to exactly one cluster. However, this adjustment can disrupt workload balance: removing 20 hours from one cluster and adding them to another may cause the latter to exceed its capacity.
+
+In principle, each cluster is designed to be both:
+- **Workload balanced** (no representative is over capacity).
+- **Geographically coherent** (reduces unnecessary travel).
+
 
 ### Outputs
-- **clusters_map.html** and **all_clusers_map.html** – Territory maps per representative.
-- **stores_group.xlsx** – Store data with assigned clusters / regions.
-- This Excel can be adjusted by hand, if switching some region assignments makes more sense.
+- .json files with store - sales representative assignment, separate one for each role
+- sales representative workload visualization
+- map with territories covered by sales representatives
 
 ### Assumptions
-- All visit durations are adjusted from a 22-day month to a 20-day month in order to align with a 4-week model. For this adjustment, hours are multiplied by ~91% (20/22).
+- The clustering is done on 4-week schedule, which is equivalent to 20 working days.
 
 ---
 
-## Step 2: Route Optimization within Assigned Territories
+## Step 2: Week Distribution
 ### Objective
-Determine the most efficient sequence of site visits for each representative’s assigned territory.
+Spread visits across the month for each role, assigning the visits to weeks and potential days.
 
 ### Inputs
-- **stores_group.xlsx** – Store data with assigned clusters / regions, generated in Step 1.
+- Clustering results
+- Visits number per month for each role
 - **Parameters:** 
-- Additional buffer: 5 minutes parking/walking per visit (10 minutes in Tel Aviv).
+    - Working weekdays
+    - Workday time limits
+    - Information if delivery dates should be taken into account in the optimization
+    - Visits Window for each role - how many days before / after the delivery sales representative visits should happen
 
 ### Approach
-1. **Explode store data into individual visits** based on the visit frequency column.
+1. **Explode store data into individual visits** based on the visit number column.
 - Handle cases where visits occur multiple times per week by assigning specific weekdays.
 - Prepare weekly visit schedules (straightforward case).
 - For biweekly and monthly visits, apply a **mini version of Weighted Constrained K-Means clustering** to ensure that, for each week, visit clusters are balanced and require roughly the same amount of time.
-2. **Incorporate distribution day constraints** into visit windows if selected (discouraged, as these constraints significantly increase complexity and risk of not finding acceptable solution).
-3. **For each week, per representative:**
-- Apply a **route optimisation algorithm** (Google Maps Route Optimization – Fleet Routing).
-- Each "vehicle" in the "fleet" is treated as a different weekday for a given week and representative.
-4. **Standardise Google Maps responses** into a common tabular format.
-- Add an additional parking/walking buffer to results. This may extend some workdays beyond 8.5 hours but can be adjusted, removed, or ignored as needed.
-- Calculate total **work + travel time** per representative.
-5. **Validate feasibility:**
-- Ensure total time is approximately equal to monthly capacity.
-- Manually adjust schedules if the optimisation algorithm skips certain visits due to constraints.
+2. Assign potential days when sales representatives should visit the stores based on delivery dates and visits windows
 
 ### Outputs
-- **routes_data.xlsx** – Optimised schedules at the day and individual-visit level for each representative.
-- **routes_map.html** – Detailed maps of optimized routes, also down to the day and individual-visit level.
-- **skipped_visits.xlsx** – List of visits that the solver could not fit within capacity due to constraints (this file should ideally remain empty).
+- .json files with week distribution - store visits spread, separate file for each role
+- weekly distribution visualization - workload per week and per sales representative
+
+---
+
+## Step 3: Route Optimization
+### Objective
+Determine the most efficient sequence of store visits for each representative.
+
+### Inputs
+- **Store data:**
+    - IDs
+    - Location
+- Week distribution output
+- **Parameters:** 
+    - Working weekdays
+    - Workday time limits
+    - Idles (including lunch breaks, average parking time and possibly others)
+    - Information if delivery dates should be taken into account in the optimization
+    - Information if optimization engine should account for road traffic
+
+### Approach
+1. **For each role, week, and sales representative separately:**
+- Apply a **route optimisation algorithm** using [Google Maps Route Optimization](https://developers.google.com/maps/documentation/route-optimization)
+- Each day is treated as a separate "vehicle" for the optimization engine
+2. **Standardise Google Maps responses** into a common tabular format.
+3. Save visits that are skipped due to the constraints.
+
+### Outputs
+- .json files with optimized schedule for sales representatives, including visit, travel and idles time - separate file for each role
+- .json files with visits skipped due to the constraints
+- average time allocation per visit and role visualization
+- performance KPIs per role
+- summary of unallocated visits
 
 ### Assumptions
-- Roads and traffic conditions are assumed to be stable and predictable.
-- All calculations and optimisations are based on a **full-time employee** model. Part-time employees would introduce additional flexibility (e.g., the ability to visit different sites on the same weekday).
-- Additional constraints, such as store visit availability windows (e.g., Seniors: 72–48 hours before distribution days; Juniors/Merchandisers: 0–24 hours after distribution days), are implemented but discouraged. These constraints significantly increase the complexity of the optimisation problem and require much more advanced approach. The current model assumes that all visits can be scheduled flexibly within the week.
+- All calculations and optimisations are based on a full-time employee model, no part time engagements are allowed.
+
+### Generating Route Optimization prerequisites
+
+Route Optimization process uses **external Google API**. To be able run this step, you need to allow using it and create a file with Google Cloud authorization credentials. Below you can find instructions on how to generate it.
+
+- In case you do not have Google account, create it.
+- Go to [Google Cloud Console](https://console.cloud.google.com).
+- Click "Create new project".
+- Fill "Project name" section.
+- Click "Create" button.
+- Navigate to APIs and services -> Enabled APIs and services.
+- Search for "Route Optimization API".
+- Click "Enable".
+- Navigate to billing.
+- Create a billing account if you don't have any, providing proper debit card details.
+- Link a billing account to the project - keep in mind that the card will be charged for cost of using Route Optimization API.
+- Navigate to IAM and admin -> Service accounts.
+- Click "Create service account".
+- Fill "Service account name" section.
+- Click "Create and continue".
+- Add role "Owner" in "Permissions" section.
+- Click "Continue" and "Done".
+- Click on newly created service account.
+- Go to "Keys" tab.
+- Click Add key -> Create new key -> JSON -> Create.
+- The .json file with authorization credentials will be saved to your PC.
+
 """
 )
+
+import os
+
+target_dir = "./config"
+os.makedirs(target_dir, exist_ok=True)
+target_path = os.path.join(target_dir, "application_default_credentials.json")
+
+# File uploader widget
+uploaded_file = st.file_uploader(
+    "Upload your application_default_credentials.json", type=["json"]
+)
+
+if uploaded_file is not None:
+    # Save file to the target location
+    with open(target_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    st.success(f"✅ Credentials file successfully saved to: {target_path}")
